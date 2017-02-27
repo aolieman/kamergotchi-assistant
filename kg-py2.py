@@ -5,7 +5,6 @@
 
 from urllib import urlencode
 from urllib2 import Request, urlopen, HTTPError, URLError
-import ssl
 import time
 import json
 from urlparse import urljoin
@@ -15,12 +14,13 @@ import datetime
 import logging
 from numpy.random import lognormal
 
-from secret import PLAYER_ID
+from secret import PLAYER_ID, SLEEP_INTERVAL
 
 
 logger = logging.getLogger()
 
 player_token = PLAYER_ID
+bedtime, waketime = SLEEP_INTERVAL
 
 base_headers = {
     'User-Agent': "okhttp/3.4.1",
@@ -37,9 +37,9 @@ def getInfo(player_token):
     
     request = Request(url, headers=headers)
 
-    context = ssl._create_unverified_context() # There is something wrong with the ssl certificate, so we just ignore it!
+    # There is something wrong with the ssl certificate, so we just ignore it!
     try:
-        json = urlopen(request, context=context).read().decode()
+        json = urlopen(request).read().decode()
     except HTTPError:
         logger.exception('Info Error:')
         time.sleep(2)
@@ -91,16 +91,16 @@ def giveMostNeededCare(player_token):
     
     
 def claimBonus(player_token):
-    context = ssl._create_unverified_context() 
     sessionUrl = 'https://api.kamergotchi.nl/game/claim'
 
     headers = base_headers.copy()
     headers['x-player-token'] = player_token
 
-    req = urllib.request.Request(sessionUrl, headers=headers, method='POST')
-
+    req = Request(sessionUrl, headers=headers)
+    req.get_method = lambda: 'POST'
+    
     try: 
-        response = urllib.request.urlopen(req, context=context)
+        response = urlopen(req)
         jsonresp = response.read().decode()
         
         progress('Succesfully claimed bonus!')
@@ -113,7 +113,6 @@ def claimBonus(player_token):
 
 
 def giveCare(player_token, careType):   
-    context = ssl._create_unverified_context() 
     sessionUrl = 'https://api.kamergotchi.nl/game/care'
     reqBody = {'bar' : careType}
 
@@ -123,10 +122,10 @@ def giveCare(player_token, careType):
     headers['x-player-token'] = player_token
     headers['Content-type'] = "application/json;charset=utf-8"
 
-    req = urllib.request.Request(sessionUrl, data, headers, method='POST')
+    req = Request(sessionUrl, data, headers)
 
     try: 
-        response = urllib.request.urlopen(req, context=context)
+        response = urlopen(req)
         jsonresp = response.read().decode()
 
         returnJson = json.loads(jsonresp)
@@ -143,15 +142,29 @@ def giveCare(player_token, careType):
 def progress(msg):
     now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     print('{} -- {}'.format(now_str, msg))
+    
+    
+def light_sleep(sec):
+    remaining = sec
+    while int(remaining) > 0:
+        decr = min(5.0, remaining)
+        print '.',
+        time.sleep(decr)
+        remaining -= decr
+        
+        # paranoid coding in the train
+        if decr < 5:
+            print('\n')
+            break
         
 
 if __name__ == '__main__':
 
     while True:
         now = datetime.datetime.now()
-        if 1 < now.hour < 7:
-            progress('Snooze for an hour and a bit')
-            time.sleep(67 * 60)
+        if bedtime < now.hour < waketime:
+            progress('ZzZzZzZ... for an hour and a bit')
+            light_sleep(67 * 60)
         else:
             long_intervals = (lognormal(0, 2, size=10) + 1) * 2
 
@@ -159,12 +172,18 @@ if __name__ == '__main__':
                 short_intervals = lognormal(0, 1, size=30) / 2
                 
                 for siv in short_intervals:
-                    wait = giveMostNeededCare(player_token)
-                    if wait:
-                        break
+                    try:
+                        wait = giveMostNeededCare(player_token)
+                        if wait:
+                            break
+                    except (HTTPError, URLError):
+                        logger.exception('Connection issue:')
+                        progress('Retrying in {} seconds'.format(wait + siv))
                         
                     time.sleep(wait + siv)
-                    
-                time.sleep(wait + liv)
+                
+                snooze = wait + min(liv, 37.7)
+                progress('Be back in {} seconds'.format(snooze))
+                light_sleep(snooze)
                 
 
