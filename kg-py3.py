@@ -13,17 +13,19 @@ from urllib.parse import urljoin
 from urllib.error import URLError
 from urllib.error import HTTPError
 import codecs
-from random import randint
+import random
 import datetime
 import logging
 from numpy.random import lognormal
+from pprint import pprint
 
-from secret import PLAYER_ID
+from secret import PLAYER_ID, SLEEP_INTERVAL
 
 
 logger = logging.getLogger()
 
 player_token = PLAYER_ID
+bedtime, waketime = SLEEP_INTERVAL
 
 base_headers = {
     'User-Agent': "okhttp/3.4.1",
@@ -56,6 +58,7 @@ def giveMostNeededCare(player_token):
     game = returnJson['game']
     careLeft = game['careLeft']
     current = game['current']
+    full_health = game['health'] == 100
 
     foodValue = current['food']
     attentionValue = current['attention']
@@ -70,7 +73,7 @@ def giveMostNeededCare(player_token):
 
     # check if there are cares left, or if the careResetDate has elapsed (careLeft stays 0 even after reset date)
     wait_seconds = 0
-    if (careLeft > 0 or now > careResetDate):
+    if not full_health and (careLeft > 0 or now > careResetDate):
 
         if (foodValue < attentionValue):
             if (knowledgeValue < foodValue):
@@ -83,13 +86,18 @@ def giveMostNeededCare(player_token):
                 giveCare(player_token, 'attention')
             else:
                 giveCare(player_token, 'knowledge')
+    elif (now > claimResetDate):
+        # time to claim the bonus
+        claimBonus(player_token)
+        pprint(game)
+    elif full_health:
+        if random.random () < 0.4:
+            wait_seconds = 44
+        else:
+            wait_seconds = 4
     else:
         wait_seconds = (careResetDate-now).total_seconds()
         progress('{}{}'.format('Not yet! Remaining seconds:', wait_seconds))
-        
-    # check if it is time to claim the bonus
-    if (now > claimResetDate):
-        claimBonus(player_token)
         
     return wait_seconds
     
@@ -153,7 +161,7 @@ if __name__ == '__main__':
 
     while True:
         now = datetime.datetime.now()
-        if 5 < now.hour < 7:
+        if bedtime < now.hour < waketime:
             progress('ZzZzZzZ... for an hour and a bit')
             time.sleep(67 * 60)
         else:
