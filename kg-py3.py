@@ -18,6 +18,7 @@ import datetime
 import logging
 from numpy.random import lognormal
 from pprint import pprint
+from functools import wraps
 
 from secret import PLAYER_ID, SLEEP_INTERVAL
 
@@ -33,6 +34,22 @@ base_headers = {
     'accept': "application/json, text/plain, */*",
     'Connection': "close"
 }
+
+last_action_time = datetime.datetime.utcnow()
+
+
+def timed_action(func):
+    """
+    Keep track of when the last action was taken
+    """
+    @wraps(func)
+    def wrapped_action(*args, **kwargs):
+        global last_action_time
+        last_action_time = datetime.datetime.utcnow()
+        return func(*args, **kwargs)
+        
+    return wrapped_action
+    
 
 
 def getInfo(player_token):
@@ -53,7 +70,7 @@ def getInfo(player_token):
     return json
 
     
-def giveMostNeededCare(player_token, try_until):
+def giveMostNeededCare(player_token):
     returnJson = json.loads(getInfo(player_token))
     game = returnJson['game']
     careLeft = game['careLeft']
@@ -90,19 +107,16 @@ def giveMostNeededCare(player_token, try_until):
         # time to claim the bonus
         claimBonus(player_token)
         pprint(game)
-        wait_seconds = True
     elif full_health:
-        if datetime.datetime.utcnow() > try_until:
-            wait_seconds = True
-        else:
-            wait_seconds = 1
+        wait_seconds = 1
     else:
         wait_seconds = (careResetDate-now).total_seconds()
-        progress('{}{}'.format('Not yet! Remaining seconds:', wait_seconds))
+        progress('Not yet! Remaining seconds: {}'.format(wait_seconds))
         
     return wait_seconds
     
-    
+
+@timed_action
 def claimBonus(player_token):
     context = ssl._create_unverified_context() 
     sessionUrl = 'https://api.kamergotchi.nl/game/claim'
@@ -125,6 +139,7 @@ def claimBonus(player_token):
         logger.exception('Unexpected Claim Error:')
 
 
+@timed_action
 def giveCare(player_token, careType):   
     context = ssl._create_unverified_context() 
     sessionUrl = 'https://api.kamergotchi.nl/game/care'
@@ -163,14 +178,15 @@ def utc_to_local(utc_dt):
     
     
 def sleep_until(wakeup_dt, perturbation):
-    delta_till = wakeup_dt - datetime.datetime.utcnow()
+    utcnow = datetime.datetime.utcnow()
+    delta_till = wakeup_dt - utcnow
     if random.random() < 0.67:
         delta_till += datetime.timedelta(seconds=perturbation)
     else:
         delta_till -= datetime.timedelta(seconds=perturbation)
     
     snooze = delta_till.seconds
-    progress('Be back at {:%Y-%m-%d %H:%M}'.format(utc_to_local(wakeup_dt)))
+    progress('Be back at {:%Y-%m-%d %H:%M:%S}\n'.format(utc_to_local(utcnow + delta_till)))
     time.sleep(snooze)
     
     
@@ -183,8 +199,8 @@ def get_next_dt():
         
 
 if __name__ == '__main__':
-    # one time next_dt init
-    next_dt = datetime.datetime.utcnow()
+    # one time next_dt init to 6 minutes ago
+    next_dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=6)
 
     while True:
         now = datetime.datetime.now()
@@ -196,14 +212,12 @@ if __name__ == '__main__':
             long_intervals = (lognormal(0, 2, size=10) + 1) * 2
 
             for liv in long_intervals:
-                give_up_at = next_dt + datetime.timedelta(minutes=9)
-                progress('Trying until {:%Y-%m-%d %H:%M}'.format(utc_to_local(give_up_at)))
                 short_intervals = lognormal(0, 1, size=30) / 2
                 
                 wait = 0
                 for siv in short_intervals:
                     try:
-                        wait = giveMostNeededCare(player_token, try_until=give_up_at)
+                        wait = giveMostNeededCare(player_token)
                         if wait:
                             break
                     except (HTTPError, URLError):
@@ -212,7 +226,11 @@ if __name__ == '__main__':
                         
                     time.sleep(wait + siv)
                 
-                if wait is True:
+                utcnow = datetime.datetime.utcnow()
+                if wait is 1 and (
+                    (last_action_time > next_dt)
+                    or (utcnow > next_dt + datetime.timedelta(minutes=9))
+                ):
                     next_dt = get_next_dt()
                     sleep_until(next_dt, liv)
                 else:
