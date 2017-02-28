@@ -53,12 +53,12 @@ def getInfo(player_token):
     return json
 
     
-def giveMostNeededCare(player_token):
+def giveMostNeededCare(player_token, try_until):
     returnJson = json.loads(getInfo(player_token))
     game = returnJson['game']
     careLeft = game['careLeft']
     current = game['current']
-    full_health = game['health'] == 100
+    full_health = min(current.values()) == 100
 
     foodValue = current['food']
     attentionValue = current['attention']
@@ -90,11 +90,12 @@ def giveMostNeededCare(player_token):
         # time to claim the bonus
         claimBonus(player_token)
         pprint(game)
+        wait_seconds = True
     elif full_health:
-        if random.random () < 0.4:
-            wait_seconds = 44
+        if datetime.datetime.utcnow() > try_until:
+            wait_seconds = True
         else:
-            wait_seconds = 4
+            wait_seconds = 1
     else:
         wait_seconds = (careResetDate-now).total_seconds()
         progress('{}{}'.format('Not yet! Remaining seconds:', wait_seconds))
@@ -155,24 +156,54 @@ def giveCare(player_token, careType):
 def progress(msg):
     now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     print('{} -- {}'.format(now_str, msg))
+    
+    
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+    
+    
+def sleep_until(wakeup_dt, perturbation):
+    delta_till = wakeup_dt - datetime.datetime.utcnow()
+    if random.random() < 0.67:
+        delta_till += datetime.timedelta(seconds=perturbation)
+    else:
+        delta_till -= datetime.timedelta(seconds=perturbation)
+    
+    snooze = delta_till.seconds
+    progress('Be back at {:%Y-%m-%d %H:%M}'.format(utc_to_local(wakeup_dt)))
+    time.sleep(snooze)
+    
+    
+def ceil_dt(dt, delta):
+    return dt + (datetime.datetime.min - dt) % delta
+    
+    
+def get_next_dt():
+    return ceil_dt(datetime.datetime.utcnow(), datetime.timedelta(minutes=30))
         
 
 if __name__ == '__main__':
+    # one time next_dt init
+    next_dt = datetime.datetime.utcnow()
 
     while True:
         now = datetime.datetime.now()
         if bedtime < now.hour < waketime:
-            progress('ZzZzZzZ... for an hour and a bit')
-            time.sleep(67 * 60)
+            progress('ZzZzZzZ')
+            next_dt = get_next_dt()
+            sleep_until(next_dt, liv)
         else:
             long_intervals = (lognormal(0, 2, size=10) + 1) * 2
 
             for liv in long_intervals:
+                give_up_at = next_dt + datetime.timedelta(minutes=9)
+                progress('Trying until {:%Y-%m-%d %H:%M}'.format(utc_to_local(give_up_at)))
                 short_intervals = lognormal(0, 1, size=30) / 2
                 
+                wait = 0
                 for siv in short_intervals:
                     try:
-                        wait = giveMostNeededCare(player_token)
+                        wait = giveMostNeededCare(player_token, try_until=give_up_at)
                         if wait:
                             break
                     except (HTTPError, URLError):
@@ -181,8 +212,12 @@ if __name__ == '__main__':
                         
                     time.sleep(wait + siv)
                 
-                snooze = wait + min(liv, 37.7)
-                progress('Be back in {} seconds'.format(snooze))
-                time.sleep(snooze)
+                if wait is True:
+                    next_dt = get_next_dt()
+                    sleep_until(next_dt, liv)
+                else:
+                    snooze = wait + min(liv, 367.67)
+                    progress('Be back in {} seconds'.format(snooze))
+                    time.sleep(snooze)
                 
 
