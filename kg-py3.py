@@ -86,10 +86,10 @@ def giveMostNeededCare(player_token):
 
     # claim bonus, or give care, or wait for a while
     wait_seconds = 0
-    if full_health and (now > claim_reset_date):
+    if full_health and (utcnow > claim_reset_date):
         claimBonus(player_token)
         pprint(game)
-    elif not full_health and (care_left > 0 or now > care_reset_date):
+    elif not full_health and (care_left > 0 or utcnow > care_reset_date):
         lowest_stat = min(current.items(), key=itemgetter(1))[0]
         giveCare(player_token, lowest_stat)
     elif full_health:
