@@ -195,7 +195,11 @@ def ceil_dt(dt, delta):
     
     
 def get_next_dt():
-    return ceil_dt(datetime.datetime.utcnow(), datetime.timedelta(minutes=30))
+    next_half_hour = ceil_dt(datetime.datetime.utcnow(), datetime.timedelta(minutes=30))
+    if next_half_hour.minute == 0:
+        return next_half_hour + datetime.timedelta(minutes=30)
+    else:
+        return next_half_hour
         
 
 if __name__ == '__main__':
