@@ -206,14 +206,14 @@ if __name__ == '__main__':
         feeling_active = True
     
         utcnow = datetime.datetime.utcnow()
-        if bedtime < utc_to_local(utcnow).hour < waketime:
-            progress('ZzZzZzZ -- {} < {} < {}'.format(bedtime, now.hour, waketime))
+        if bedtime <= utc_to_local(utcnow).hour < waketime:
+            progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
             next_dt = get_next_dt(claim_reset)
             if not(next_dt - utcnow).total_seconds() < 5 * 60:
                 # not waking up this iteration
                 feeling_active = False
                 
-            sleep_until(next_dt, liv)
+            sleep_until(next_dt, random.random() * 4)
             
         if feeling_active:
             long_intervals = (lognormal(0, 2, size=10) + 1) * 2
@@ -228,8 +228,8 @@ if __name__ == '__main__':
                         wait, claim_reset = giveMostNeededCare(player_token)
                         if wait:
                             break
-                    except (HTTPError, URLError) as e:
-                        logger.error('Connection issue:\n{}'.format(e))
+                    except:
+                        logger.exception('Unexpected issue:')
                         progress('Retrying in {} seconds'.format(wait + siv))
                         
                     time.sleep(wait + siv)
