@@ -63,8 +63,8 @@ def getInfo(player_token):
     context = ssl._create_unverified_context() # There is something wrong with the ssl certificate, so we just ignore it!
     try:
         json = urlopen(request, context=context).read().decode()
-    except HTTPError:
-        logger.exception('Info Error:')
+    except (HTTPError, URLError) as e:
+        logger.error('Info Error:\n{}'.format(e))
         time.sleep(2)
         return getInfo(player_token)
 
@@ -97,7 +97,7 @@ def giveMostNeededCare(player_token):
         wait_seconds = 1
     else:
         # we hit the care limit; try again in about 6 minutes
-        wait_seconds = (careResetDate - utcnow).total_seconds()
+        wait_seconds = (care_reset_date - utcnow).total_seconds()
         progress('Not yet! Remaining seconds: {}'.format(wait_seconds))
         
     return wait_seconds, claim_reset_date
@@ -118,10 +118,8 @@ def claimBonus(player_token):
         jsonresp = response.read().decode()
         
         progress('Succesfully claimed bonus!')
-    except HTTPError as httperror:
-        logger.exception('Claim Error:')
-    except URLError as urlerror:
-        logger.exception('Claim Error:')
+    except (HTTPError, URLError) as e:
+        logger.error('Claim Error:\n{}'.format(e))
     except:
         logger.exception('Unexpected Claim Error:')
 
@@ -147,17 +145,15 @@ def giveCare(player_token, careType):
         returnJson = json.loads(jsonresp)
         game = returnJson['game']
         progress('{}{}{}{}{}'.format('Succesfully cared: ', careType, '(score: ', game['score'], ')'))
-    except HTTPError as httperror:
-        logger.exception('Care Error:')
-    except URLError as urlerror:
-        logger.exception('Care Error:')
+    except (HTTPError, URLError) as e:
+        logger.error('Care Error:\n{}'.format(e))
     except:
         logger.exception('Unexpected Care Error:')
 
         
 def progress(msg):
     now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    print('{} -- {}'.format(now_str, msg))
+    logger.info('{} -- {}'.format(now_str, msg))
     
     
 def utc_to_local(utc_dt):
@@ -200,7 +196,7 @@ if __name__ == '__main__':
     while True:
         now = datetime.datetime.now()
         if bedtime < now.hour < waketime:
-            progress('ZzZzZzZ')
+            progress('ZzZzZzZ -- {} < {} < {}'.format(bedtime, now.hour, waketime))
             next_dt = get_next_dt()
             sleep_until(next_dt, liv)
         else:
@@ -216,8 +212,8 @@ if __name__ == '__main__':
                         wait, claim_reset = giveMostNeededCare(player_token)
                         if wait:
                             break
-                    except (HTTPError, URLError):
-                        logger.exception('Connection issue:')
+                    except (HTTPError, URLError) as e:
+                        logger.error('Connection issue:\n{}'.format(e))
                         progress('Retrying in {} seconds'.format(wait + siv))
                         
                     time.sleep(wait + siv)
