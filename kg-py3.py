@@ -24,7 +24,16 @@ from operator import itemgetter
 from secret import PLAYER_ID, SLEEP_INTERVAL
 
 
-logger = logging.getLogger()
+logger = logging.getLogger('kamergotchi.player')
+logger.handlers = []
+lhand = logging.StreamHandler()
+formatter = logging.Formatter(
+    '%(asctime)s -- %(message)s',
+    "%Y-%m-%d %H:%M:%S"
+)
+lhand.setFormatter(formatter)
+logger.addHandler(lhand)
+logger.setLevel(logging.INFO)
 
 player_token = PLAYER_ID
 bedtime, waketime = SLEEP_INTERVAL
@@ -152,8 +161,7 @@ def giveCare(player_token, careType):
 
         
 def progress(msg):
-    now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    logger.info('{} -- {}'.format(now_str, msg))
+    logger.info(msg)
     
     
 def utc_to_local(utc_dt):
@@ -192,14 +200,22 @@ def get_next_dt(claim_reset_date=None):
 if __name__ == '__main__':
     # one time next_dt init to 6 minutes ago
     next_dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=6)
+    claim_reset = next_dt
 
     while True:
-        now = datetime.datetime.now()
-        if bedtime < now.hour < waketime:
+        feeling_active = True
+    
+        utcnow = datetime.datetime.utcnow()
+        if bedtime < utc_to_local(utcnow).hour < waketime:
             progress('ZzZzZzZ -- {} < {} < {}'.format(bedtime, now.hour, waketime))
-            next_dt = get_next_dt()
+            next_dt = get_next_dt(claim_reset)
+            if not(next_dt - utcnow).total_seconds() < 5 * 60:
+                # not waking up this iteration
+                feeling_active = False
+                
             sleep_until(next_dt, liv)
-        else:
+            
+        if feeling_active:
             long_intervals = (lognormal(0, 2, size=10) + 1) * 2
 
             for liv in long_intervals:
