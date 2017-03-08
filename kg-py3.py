@@ -73,7 +73,7 @@ def getInfo(player_token):
     try:
         json = urlopen(request, context=context).read().decode()
     except (HTTPError, URLError) as e:
-        logger.error('Info Error:\n{}'.format(e))
+        logger.error('Info Error: {}'.format(e))
         time.sleep(2)
         return getInfo(player_token)
 
@@ -128,7 +128,7 @@ def claimBonus(player_token):
         
         progress('Succesfully claimed bonus!')
     except (HTTPError, URLError) as e:
-        logger.error('Claim Error:\n{}'.format(e))
+        logger.error('Claim Error: {}'.format(e))
     except:
         logger.exception('Unexpected Claim Error:')
 
@@ -153,9 +153,9 @@ def giveCare(player_token, careType):
 
         returnJson = json.loads(jsonresp)
         game = returnJson['game']
-        progress('{}{}{}{}{}'.format('Succesfully cared: ', careType, '(score: ', game['score'], ')'))
+        progress('{} -- Succesfully cared: {}'.format(game['score'], careType))
     except (HTTPError, URLError) as e:
-        logger.error('Care Error:\n{}'.format(e))
+        logger.error('Care Error: {}'.format(e))
     except:
         logger.exception('Unexpected Care Error:')
 
@@ -203,24 +203,23 @@ if __name__ == '__main__':
     claim_reset = next_dt
 
     while True:
-        feeling_active = True
-    
-        utcnow = datetime.datetime.utcnow()
-        if bedtime <= utc_to_local(utcnow).hour < waketime:
-            progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
-            next_dt = get_next_dt(claim_reset)
-            if not(next_dt - utcnow).total_seconds() < 5 * 60:
-                # not waking up this iteration
-                feeling_active = False
-                
-            sleep_until(next_dt, random.random() * 4)
-            
-        if feeling_active:
-            long_intervals = (lognormal(0, 2, size=10) + 1) * 2
+        long_intervals = (lognormal(0, 2, size=10) + 1) * 2
 
-            for liv in long_intervals:
-                short_intervals = lognormal(0, 1, size=30) / 2
+        for liv in long_intervals:
+            short_intervals = lognormal(0, 1, size=30) / 2
+            feeling_active = True
+            
+            utcnow = datetime.datetime.utcnow()
+            if bedtime <= utc_to_local(utcnow).hour < waketime:
+                progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
+                next_dt = get_next_dt(claim_reset)
+                if not(next_dt - utcnow).total_seconds() < 5 * 60:
+                    # not waking up this iteration
+                    feeling_active = False
+                    
+                sleep_until(next_dt, random.random() * 4)
                 
+            if feeling_active:
                 wait = 0
                 claim_reset = next_dt
                 for siv in short_intervals:
