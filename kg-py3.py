@@ -17,11 +17,11 @@ import random
 import datetime
 import logging
 from numpy.random import lognormal
-from pprint import pprint
+from pprint import pformat
 from functools import wraps
 from operator import itemgetter
 
-from secret import PLAYER_ID, SLEEP_INTERVAL
+from secret import PLAYER_ID, SLEEP_INTERVAL, MAXIMIZE_DAY_SCORE
 
 
 logger = logging.getLogger('kamergotchi.player')
@@ -62,7 +62,7 @@ def timed_action(func):
     
 
 
-def getInfo(player_token):
+def getInfo(player_token, retries=0):
     url = 'https://api.kamergotchi.nl/game'
     headers = base_headers.copy()
     headers['x-player-token'] = player_token
@@ -71,33 +71,43 @@ def getInfo(player_token):
 
     context = ssl._create_unverified_context() # There is something wrong with the ssl certificate, so we just ignore it!
     try:
-        json = urlopen(request, context=context).read().decode()
+        json_resp = urlopen(request, context=context).read().decode()
     except (HTTPError, URLError) as e:
         logger.error('Info Error: {}'.format(e))
-        time.sleep(2)
-        return getInfo(player_token)
+        time.sleep(1 + 2 * retries)
+        return getInfo(player_token, 1 + retries)
 
-    return json
+    resp_dict = json.loads(json_resp)
+    game = resp_dict['game']
+    if game.get('quotes'):
+        progress(str(game['quotes']))
+    game['care_reset_date'] = datetime.datetime.strptime(
+        game['careReset'], 
+        "%Y-%m-%dT%H:%M:%S.%fZ"
+    )
+    game['claim_reset_date'] = datetime.datetime.strptime(
+        game['claimReset'], 
+        "%Y-%m-%dT%H:%M:%S.%fZ"
+    )
+    return game
 
     
 def giveMostNeededCare(player_token):
-    return_json = json.loads(getInfo(player_token))
-    game = return_json['game']
+    game = getInfo(player_token)
+    
     care_left = game['careLeft']
     current = game['current']
     full_health = min(current.values()) == 100
 
-    care_reset = game['careReset']
-    claim_reset = game['claimReset']
-    care_reset_date = datetime.datetime.strptime(care_reset, "%Y-%m-%dT%H:%M:%S.%fZ")
-    claim_reset_date = datetime.datetime.strptime(claim_reset, "%Y-%m-%dT%H:%M:%S.%fZ")
+    care_reset_date = game['care_reset_date']
+    claim_reset_date = game['claim_reset_date']
     utcnow = datetime.datetime.utcnow()
 
     # claim bonus, or give care, or wait for a while
     wait_seconds = 0
-    if full_health and (utcnow > claim_reset_date):
+    if (MAXIMIZE_DAY_SCORE or full_health) and (utcnow > claim_reset_date):
         claimBonus(player_token)
-        pprint(game)
+        logger.info(pformat(game))
     elif not full_health and (care_left > 0 or utcnow > care_reset_date):
         lowest_stat = min(current.items(), key=itemgetter(1))[0]
         giveCare(player_token, lowest_stat)
@@ -200,7 +210,6 @@ def get_next_dt(claim_reset_date=None):
 if __name__ == '__main__':
     # one time next_dt init to 6 minutes ago
     next_dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=6)
-    claim_reset = next_dt
 
     while True:
         long_intervals = (lognormal(0, 2, size=10) + 1) * 2
@@ -209,15 +218,25 @@ if __name__ == '__main__':
             short_intervals = lognormal(0, 1, size=30) / 2
             feeling_active = True
             
+            game = getInfo(player_token)
+            claim_reset = game['claim_reset_date']
+            time.sleep(1 + short_intervals[-1])
+            
             utcnow = datetime.datetime.utcnow()
             if bedtime <= utc_to_local(utcnow).hour < waketime:
                 progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
                 next_dt = get_next_dt(claim_reset)
-                if not(next_dt - utcnow).total_seconds() < 5 * 60:
-                    # not waking up this iteration
-                    feeling_active = False
-                    
-                sleep_until(next_dt, random.random() * 4)
+                second_delta_next = (next_dt - claim_reset).total_seconds()
+                second_delta_now = (utcnow - claim_reset).total_seconds()
+                max_wait_seconds = 5 * 60
+                
+                if not utcnow > claim_reset or second_delta_now < max_wait_seconds:
+                    if not second_delta_next < max_wait_seconds:
+                        # not waking up this iteration
+                        progress('ZzZzZzZ -- {} >= {}'.format(second_delta_next, max_wait_seconds))
+                        feeling_active = False
+                        
+                    sleep_until(next_dt, random.random() * 4)
                 
             if feeling_active:
                 wait = 0
