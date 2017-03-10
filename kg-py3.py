@@ -21,7 +21,7 @@ from pprint import pformat
 from functools import wraps
 from operator import itemgetter
 
-from secret import PLAYER_ID, SLEEP_INTERVAL, MAXIMIZE_DAY_SCORE
+from secret import PLAYER_ID, SLEEP_INTERVAL, CLAIM_ONLY
 
 
 logger = logging.getLogger('kamergotchi.player')
@@ -98,6 +98,8 @@ def giveMostNeededCare(player_token):
     care_left = game['careLeft']
     current = game['current']
     full_health = min(current.values()) == 100
+    if not full_health:
+        progress(str(current))
 
     care_reset_date = game['care_reset_date']
     claim_reset_date = game['claim_reset_date']
@@ -105,13 +107,13 @@ def giveMostNeededCare(player_token):
 
     # claim bonus, or give care, or wait for a while
     wait_seconds = 0
-    if (MAXIMIZE_DAY_SCORE or full_health) and (utcnow > claim_reset_date):
+    if (CLAIM_ONLY or full_health) and (utcnow > claim_reset_date):
         claimBonus(player_token)
         logger.info(pformat(game))
-    elif not full_health and (care_left > 0 or utcnow > care_reset_date):
+    elif not (CLAIM_ONLY or full_health) and (care_left > 0 or utcnow > care_reset_date):
         lowest_stat = min(current.items(), key=itemgetter(1))[0]
         giveCare(player_token, lowest_stat)
-    elif full_health:
+    elif CLAIM_ONLY or full_health:
         # wait until next action
         wait_seconds = 1
     else:
@@ -216,7 +218,6 @@ if __name__ == '__main__':
 
         for liv in long_intervals:
             short_intervals = lognormal(0, 1, size=30) / 2
-            feeling_active = True
             
             game = getInfo(player_token)
             claim_reset = game['claim_reset_date']
@@ -226,44 +227,38 @@ if __name__ == '__main__':
             if bedtime <= utc_to_local(utcnow).hour < waketime:
                 progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
                 next_dt = get_next_dt(claim_reset)
-                second_delta_next = (next_dt - claim_reset).total_seconds()
-                second_delta_now = (utcnow - claim_reset).total_seconds()
+                seconds_until_claim = (claim_reset - utcnow).total_seconds()
                 max_wait_seconds = 5 * 60
                 
-                if not utcnow > claim_reset or second_delta_now < max_wait_seconds:
-                    if not second_delta_next < max_wait_seconds:
-                        # not waking up this iteration
-                        progress('ZzZzZzZ -- {} >= {}'.format(second_delta_next, max_wait_seconds))
-                        feeling_active = False
-                        
+                if utcnow > claim_reset or seconds_until_claim <= max_wait_seconds:  
+                    progress('Claim due {:%Y-%m-%d %H:%M:%S}'.format(utc_to_local(claim_reset)))
+                else:
                     sleep_until(next_dt, random.random() * 4)
                 
-            if feeling_active:
-                wait = 0
-                claim_reset = next_dt
-                for siv in short_intervals:
-                    try:
-                        wait, claim_reset = giveMostNeededCare(player_token)
-                        if wait:
-                            break
-                    except:
-                        logger.exception('Unexpected issue:')
-                        progress('Retrying in {} seconds'.format(wait + siv))
-                        
-                    time.sleep(wait + siv)
-                
-                utcnow = datetime.datetime.utcnow()
-                
-                # keep trying until an action is taken or 9 minutes have passed
-                if wait is 1 and (
-                    (last_action_time > next_dt)
-                    or (utcnow > next_dt + datetime.timedelta(minutes=9))
-                ):
-                    next_dt = get_next_dt(claim_reset)
-                    sleep_until(next_dt, liv)
-                else:
-                    snooze = wait + min(liv, 367.67)
-                    progress('Be back in {} seconds'.format(snooze))
-                    time.sleep(snooze)
+            wait = 0
+            for siv in short_intervals:
+                try:
+                    wait, claim_reset = giveMostNeededCare(player_token)
+                    if wait:
+                        break
+                except:
+                    logger.exception('Unexpected issue:')
+                    progress('Retrying in {} seconds'.format(wait + siv))
+                    
+                time.sleep(wait + siv)
+            
+            utcnow = datetime.datetime.utcnow()
+            
+            # keep trying until an action is taken or 9 minutes have passed
+            if wait is 1 and (
+                (last_action_time > next_dt)
+                or (utcnow > next_dt + datetime.timedelta(minutes=9))
+            ):
+                next_dt = get_next_dt(claim_reset)
+                sleep_until(next_dt, liv)
+            else:
+                snooze = wait + min(liv, 367.67)
+                progress('Be back in {} seconds'.format(snooze))
+                time.sleep(snooze)
                 
 
