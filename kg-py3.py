@@ -80,7 +80,7 @@ def getInfo(player_token, retries=0):
     resp_dict = json.loads(json_resp)
     game = resp_dict['game']
     if game.get('quotes'):
-        progress(str(game['quotes']))
+        progress(pformat(game['quotes']))
     game['care_reset_date'] = datetime.datetime.strptime(
         game['careReset'], 
         "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -136,7 +136,11 @@ def claimBonus(player_token):
 
     try: 
         response = urllib.request.urlopen(req, context=context)
-        jsonresp = response.read().decode()
+        json_resp = response.read().decode()
+        resp_dict = json.loads(json_resp)
+        game = resp_dict['game']
+        if game.get('quotes'):
+            progress(pformat(game['quotes']))
         
         progress('Succesfully claimed bonus!')
     except (HTTPError, URLError) as e:
@@ -161,10 +165,12 @@ def giveCare(player_token, careType):
 
     try: 
         response = urllib.request.urlopen(req, context=context)
-        jsonresp = response.read().decode()
+        json_resp = response.read().decode()
+        resp_dict = json.loads(json_resp)
+        game = resp_dict['game']
+        if game.get('quotes'):
+            progress(pformat(game['quotes']))
 
-        returnJson = json.loads(jsonresp)
-        game = returnJson['game']
         progress('{} -- Succesfully cared: {}'.format(game['score'], careType))
     except (HTTPError, URLError) as e:
         logger.error('Care Error: {}'.format(e))
