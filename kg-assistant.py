@@ -1,5 +1,5 @@
 # Kamergotchi Assistant
-# https://github.com/aolieman/kamergotchi-automator
+# https://github.com/aolieman/kamergotchi-assistant
 #
 # FORK OF:
 # Kamergotchi Automator
