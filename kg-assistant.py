@@ -6,6 +6,7 @@
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import ssl
+import sys
 import time
 import json
 import urllib.request
@@ -81,6 +82,11 @@ def getInfo(player_token, retries=0):
     game = resp_dict['game']
     if game.get('quotes'):
         progress(pformat(game['quotes']))
+        
+    full_health = min(game['current'].values()) == 100
+    if not full_health:
+        progress(str(game['current']))
+        
     game['care_reset_date'] = datetime.datetime.strptime(
         game['careReset'], 
         "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -98,8 +104,6 @@ def giveMostNeededCare(player_token):
     care_left = game['careLeft']
     current = game['current']
     full_health = min(current.values()) == 100
-    if not full_health:
-        progress(str(current))
 
     care_reset_date = game['care_reset_date']
     claim_reset_date = game['claim_reset_date']
@@ -194,7 +198,7 @@ def sleep_until(wakeup_dt, perturbation):
     else:
         delta_till -= datetime.timedelta(seconds=perturbation)
     
-    snooze = delta_till.seconds
+    snooze = abs(delta_till.seconds)
     progress('Be back at {:%Y-%m-%d %H:%M:%S}\n'.format(utc_to_local(utcnow + delta_till)))
     time.sleep(snooze)
     
@@ -206,9 +210,17 @@ def ceil_dt(dt, delta):
 def get_next_dt(claim_reset_date=None):
     utcnow = datetime.datetime.utcnow()
     next_half_hour = ceil_dt(utcnow, datetime.timedelta(minutes=30))
+    
+    # stop making requests before the game is over
+    if next_half_hour >= datetime.datetime(2017, 3, 11, 23, 00):
+        progress('Plenty of cares were given. Take care!')
+        sys.exit()
+    
+    # turn a whole hour into the next half hour
     if next_half_hour.minute == 0:
         next_half_hour += datetime.timedelta(minutes=30)
     
+    # upcoming claim before next half hour
     if claim_reset_date and utcnow < claim_reset_date < next_half_hour:
         return claim_reset_date
         
@@ -230,8 +242,12 @@ if __name__ == '__main__':
             time.sleep(1 + short_intervals[-1])
             
             utcnow = datetime.datetime.utcnow()
-            if bedtime <= utc_to_local(utcnow).hour < waketime:
-                progress('ZzZzZzZ -- {} <= {} < {}'.format(bedtime, utc_to_local(utcnow).hour, waketime))
+            if bedtime <= utc_to_local(utcnow) < waketime:
+                progress(
+                    'ZzZzZzZ -- {:%Y-%m-%d %H:%M} <= {:%Y-%m-%d %H:%M} < {:%Y-%m-%d %H:%M}'.format(
+                        bedtime, utc_to_local(utcnow), waketime
+                    )
+                )
                 next_dt = get_next_dt(claim_reset)
                 seconds_until_claim = (claim_reset - utcnow).total_seconds()
                 max_wait_seconds = 5 * 60
