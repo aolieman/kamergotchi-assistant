@@ -3,20 +3,17 @@
 # Developed by: Martien Bonfrer
 # Date: 20/2/17
 
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-import ssl
-import sys
-import time
-import json
-import urllib.request
-from urllib.parse import urljoin
-from urllib.error import URLError
-from urllib.error import HTTPError
 import codecs
 import random
 import datetime
 import logging
+import ssl
+import sys
+import time
+import json
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urljoin
+from urllib.request import Request, urlopen
 from numpy.random import lognormal
 from pprint import pformat
 from functools import wraps
@@ -136,10 +133,10 @@ def claimBonus(player_token):
     headers = base_headers.copy()
     headers['x-player-token'] = player_token
 
-    req = urllib.request.Request(sessionUrl, headers=headers, method='POST')
+    req = Request(sessionUrl, headers=headers, method='POST')
 
     try: 
-        response = urllib.request.urlopen(req, context=context)
+        response = urlopen(req, context=context)
         json_resp = response.read().decode()
         resp_dict = json.loads(json_resp)
         game = resp_dict['game']
@@ -165,10 +162,10 @@ def giveCare(player_token, careType):
     headers['x-player-token'] = player_token
     headers['Content-type'] = "application/json;charset=utf-8"
 
-    req = urllib.request.Request(sessionUrl, data, headers, method='POST')
+    req = Request(sessionUrl, data, headers, method='POST')
 
     try: 
-        response = urllib.request.urlopen(req, context=context)
+        response = urlopen(req, context=context)
         json_resp = response.read().decode()
         resp_dict = json.loads(json_resp)
         game = resp_dict['game']
