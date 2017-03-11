@@ -1,3 +1,7 @@
+# Kamergotchi Assistant
+# https://github.com/aolieman/kamergotchi-automator
+#
+# FORK OF:
 # Kamergotchi Automator
 # https://github.com/MartienB/kamergotchi-automator
 # Developed by: Martien Bonfrer
@@ -67,7 +71,8 @@ def getInfo(player_token, retries=0):
     
     request = Request(url, headers=headers)
 
-    context = ssl._create_unverified_context() # There is something wrong with the ssl certificate, so we just ignore it!
+    # There is something wrong with the ssl certificate, so we just ignore it!
+    context = ssl._create_unverified_context()
     try:
         json_resp = urlopen(request, context=context).read().decode()
     except (HTTPError, URLError) as e:
