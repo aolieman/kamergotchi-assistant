@@ -3,13 +3,14 @@ Running a campaign is exhausting! Kamergotchi Assistant keeps *lijsttrekkers* he
 
 Python script for automating the 'care process' of your politician in the Kamergotchi app (http://www.kamergotchi.nl/).
 
-You have to know your player-token (```x-player-token```) this can be found by inspecting the request send by your phone to the kamergotchi API. I used Burp Suite (https://portswigger.net/burp/) to inspect the request and find my player_token. There also exist certain apps that can display your phone's `DEVICE_ID` without the need for request inspection.
+You have to know your player-token (```x-player-token```), which (at least on Android) is the same as the device's ID. It can be found by inspecting the request sent by your phone to the kamergotchi API, for instance by using Burp Suite (https://portswigger.net/burp/) as a proxy. There also exist certain apps that can display your phone's `DEVICE_ID` without the need for request inspection.
 
 This, and other secret variables, need to be declared in `secret.py`. An example `sample-secret.py` is provided to help you get going.
 
 ## Example output
 
-```python
+```
+$ python kg-assistant.py
 2017-03-10 16:47:04 -- Be back at 2017-03-10 17:29:42
 
 2017-03-10 17:29:42 -- Be back in 3.6961928065760152 seconds
